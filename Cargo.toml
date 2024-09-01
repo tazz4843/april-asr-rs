@@ -1,0 +1,12 @@
+[package]
+name = "april-asr-rs"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+
+[workspace]
+members = ["sys"]
+
+[dependencies]
+april-asr-rs-sys = { path = "sys" }
+bitflags = "2"

@@ -1,0 +1,3 @@
+[submodule "sys/april-asr"]
+	path = sys/april-asr
+	url = https://github.com/abb128/april-asr/
