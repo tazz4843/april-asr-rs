@@ -2,7 +2,7 @@ use crate::april_result_type::AprilResultType;
 use crate::april_token::{AprilToken, AprilTokenFlags};
 use std::ffi::{c_void, CStr};
 
-pub type AprilHandlerCallback = fn(AprilResultType, &[AprilToken]);
+pub type AprilHandlerCallback = fn(AprilResultType, Vec<AprilToken>);
 
 pub struct AprilConfig {
     ptr: april_asr_rs_sys::AprilConfig,
@@ -65,7 +65,7 @@ impl AprilConfig {
                 tokens.push(AprilToken::new(token, *logprob, flag_bits, *time_ms));
             }
 
-            user_fn(result_type_rusty, &tokens);
+            user_fn(result_type_rusty, tokens);
         }
 
         match handler {
