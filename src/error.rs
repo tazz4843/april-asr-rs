@@ -9,6 +9,8 @@ pub enum Error {
     NullPtr,
     /// Invalid UTF-8 was detected in a string from April
     InvalidUtf8(Utf8Error),
+    /// Empty audio buffer was passed to feed_pcm16
+    EmptyAudio,
 }
 
 impl From<NulError> for Error {

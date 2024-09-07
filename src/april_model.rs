@@ -1,3 +1,4 @@
+use crate::april_config::AprilConfig;
 use crate::april_session::AprilSession;
 use crate::error::{Error, Result};
 use std::ffi::{CStr, CString};
@@ -16,6 +17,8 @@ macro_rules! null_ptr_error {
 
 impl AprilModel {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self> {
+        crate::do_init();
+
         Self::_new(CString::new(path)?)
     }
 
@@ -51,8 +54,10 @@ impl AprilModel {
         unsafe { april_asr_rs_sys::aam_get_sample_rate(self.ptr) }
     }
 
-    pub fn create_session<'this>(&'this self, config: AprilConfig) -> AprilSession<'this> {
-        unsafe { april_asr_rs_sys::aas_create_session(self.ptr, config) }
+    pub fn create_session(&self, config: AprilConfig) -> Result<AprilSession> {
+        let raw_cfg = config.into_raw();
+        let raw_session = unsafe { april_asr_rs_sys::aas_create_session(self.ptr, raw_cfg) };
+        AprilSession::new(raw_session)
     }
 }
 
