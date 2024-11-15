@@ -5,7 +5,7 @@ edition = "2021"
 license = "CC0-1.0"
 
 [workspace]
-members = ["sys"]
+members = ["examples/main-sample", "sys"]
 
 [dependencies]
 april-asr-rs-sys = { path = "sys" }

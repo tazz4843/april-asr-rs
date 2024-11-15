@@ -12,7 +12,7 @@ pub use april_config::{AprilConfig, AprilConfigFlags, AprilHandlerCallback};
 pub use april_model::AprilModel;
 pub use april_result_type::AprilResultType;
 pub use april_session::AprilSession;
-pub use april_token::{AprilToken, AprilTokenFlags};
+pub use april_token::{AprilToken, AprilTokenFlags, AprilTokens};
 pub use error::{Error, Result};
 
 static ASSERT_INIT: Once = Once::new();

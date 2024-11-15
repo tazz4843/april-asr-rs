@@ -41,4 +41,16 @@ fn main() {
             }
         }
     };
+
+    cmake::Config::new(&whisper_root).build();
+
+    let out_dir = env::var("OUT_DIR").expect("Expecting output directory");
+    let out_dir = PathBuf::from(out_dir);
+    let input_dir = out_dir.join("build/libaprilasr_static.a");
+    let output_dir = out_dir.join("libaprilasr.a");
+    std::fs::copy(input_dir, output_dir).expect("failed to copy to OUT_DIR");
+
+    println!("cargo:rustc-link-lib=static=aprilasr");
+    println!("cargo:rustc-link-lib=dylib=onnxruntime");
+    println!("cargo:rustc-link-search={}", out_dir.display());
 }

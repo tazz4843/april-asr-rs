@@ -3,6 +3,7 @@ name = "april-asr-rs-sys"
 version = "0.1.0"
 edition = "2021"
 license = "CC0-1.0"
+links = "aprilasr"
 
 [build-dependencies]
 cmake = "0.1"

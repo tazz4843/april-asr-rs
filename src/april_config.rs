@@ -1,8 +1,9 @@
 use crate::april_result_type::AprilResultType;
-use crate::april_token::{AprilToken, AprilTokenFlags};
+use crate::april_token::{AprilToken, AprilTokenFlags, AprilTokens};
 use std::ffi::{c_void, CStr};
+use std::ptr::{addr_of, addr_of_mut};
 
-pub type AprilHandlerCallback = fn(AprilResultType, Vec<AprilToken>);
+pub type AprilHandlerCallback = Box<dyn FnMut(AprilResultType, AprilTokens)>;
 
 pub struct AprilConfig {
     ptr: april_asr_rs_sys::AprilConfig,
@@ -40,8 +41,12 @@ impl AprilConfig {
             tokens: *const april_asr_rs_sys::AprilToken,
         ) {
             if user_data.is_null() {
-                // warn!("got nullptr for AprilConfig::set_handler_fn::trampoline::user_data: this is a bug!");
+                unreachable!("got nullptr for AprilConfig::set_handler_fn::trampoline::user_data: this is a bug!");
             }
+
+            dbg!(user_data);
+
+            // SAFETY: genuinely who the fuck knows
             let user_fn = unsafe { &mut *(user_data as *mut AprilHandlerCallback) };
 
             let result_type_rusty = AprilResultType::from(result_type);
@@ -65,13 +70,14 @@ impl AprilConfig {
                 tokens.push(AprilToken::new(token, *logprob, flag_bits, *time_ms));
             }
 
-            user_fn(result_type_rusty, tokens);
+            user_fn(result_type_rusty, AprilTokens(tokens));
         }
 
         match handler {
-            Some(handler_fn) => {
+            Some(mut handler_fn) => {
                 self.ptr.handler = Some(trampoline);
-                self.ptr.userdata = handler_fn as *mut c_void;
+                self.ptr.userdata = addr_of_mut!(handler_fn) as *mut c_void;
+                dbg!(self.ptr.userdata);
             }
             None => {
                 self.ptr.handler = None;
