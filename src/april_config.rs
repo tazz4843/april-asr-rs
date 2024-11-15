@@ -1,15 +1,17 @@
 use crate::april_result_type::AprilResultType;
 use crate::april_token::{AprilToken, AprilTokenFlags, AprilTokens};
 use std::ffi::{c_void, CStr};
-use std::ptr::{addr_of, addr_of_mut};
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 pub type AprilHandlerCallback = Box<dyn FnMut(AprilResultType, AprilTokens)>;
 
-pub struct AprilConfig {
+pub struct AprilConfig<'a> {
     ptr: april_asr_rs_sys::AprilConfig,
+    phantom: PhantomData<&'a ()>,
 }
 
-impl AprilConfig {
+impl<'a> AprilConfig<'a> {
     pub fn into_raw(self) -> april_asr_rs_sys::AprilConfig {
         self.ptr
     }
@@ -29,55 +31,86 @@ impl AprilConfig {
         self.ptr.handler = handler;
     }
 
+    /// Set user_data for the callback handler.
+    ///
+    /// # Safety
+    /// * if you called [`Self::set_handler_fn`]  at any point before calling this,
+    ///   you **must** update the function being called with [`Self::set_handler_fn_raw`] otherwise
+    ///   you **will** get Undefined Behaviour as the default trampoline tries to call your
+    ///   data as a function.
+    pub unsafe fn set_user_data(&mut self, user_data: *mut c_void) {
+        self.ptr.userdata = user_data;
+    }
+
     /// Safe variant of handler function.
     ///
     /// Note any panics in the handler will be caught by Rust's runtime
     /// and result in an immediate abort: do not panic!
-    pub fn set_handler_fn(&mut self, handler: Option<AprilHandlerCallback>) {
-        unsafe extern "C" fn trampoline(
+    pub fn set_handler_fn<O, F>(&mut self, handler: O)
+    where
+        F: FnMut(AprilResultType, AprilTokens) + 'a,
+        O: Into<Option<F>>,
+    {
+        unsafe extern "C" fn trampoline<F>(
             user_data: *mut c_void,
             result_type: april_asr_rs_sys::AprilResultType,
             num_tokens: usize,
             tokens: *const april_asr_rs_sys::AprilToken,
-        ) {
+        ) where
+            F: FnMut(AprilResultType, AprilTokens),
+        {
             if user_data.is_null() {
                 unreachable!("got nullptr for AprilConfig::set_handler_fn::trampoline::user_data: this is a bug!");
             }
-
-            dbg!(user_data);
 
             // SAFETY: genuinely who the fuck knows
             let user_fn = unsafe { &mut *(user_data as *mut AprilHandlerCallback) };
 
             let result_type_rusty = AprilResultType::from(result_type);
 
-            // SAFETY: we must trust that april gives us a valid ptr + a valid length,
-            // which should always be upheld
-            let token_array = unsafe { std::slice::from_raw_parts(tokens, num_tokens) };
+            let tokens = if tokens.is_null() {
+                vec![]
+            } else if !tokens.is_aligned() {
+                panic!("unaligned tokens array passed to AprilConfig::set_handler_fn::trampoline.tokens");
+                // we've done something very wrong here,
+                // and we're also in a function that cannot unwind,
+                // but, to be safe, abort
+                std::process::abort();
+            } else {
+                // SAFETY: we must trust that april gives us a valid ptr + a valid length,
+                // which should always be upheld
+                let token_array = unsafe { std::slice::from_raw_parts(tokens, num_tokens) };
 
-            let mut tokens = Vec::new();
-            for elm in token_array {
-                let april_asr_rs_sys::AprilToken {
-                    token,
-                    logprob,
-                    flags,
-                    time_ms,
-                    ..
-                } = elm;
-                let token = unsafe { CStr::from_ptr(*token) }.to_string_lossy();
-                let flag_bits = AprilTokenFlags::from_bits_retain(*flags);
+                let mut tokens = Vec::new();
+                for elm in token_array {
+                    let april_asr_rs_sys::AprilToken {
+                        token,
+                        logprob,
+                        flags,
+                        time_ms,
+                        ..
+                    } = elm;
+                    let token = unsafe { CStr::from_ptr(*token) }.to_string_lossy();
+                    let flag_bits = AprilTokenFlags::from_bits_retain(*flags);
 
-                tokens.push(AprilToken::new(token, *logprob, flag_bits, *time_ms));
-            }
+                    tokens.push(AprilToken::new(token, *logprob, flag_bits, *time_ms));
+                }
+                tokens
+            };
 
             user_fn(result_type_rusty, AprilTokens(tokens));
         }
 
-        match handler {
-            Some(mut handler_fn) => {
-                self.ptr.handler = Some(trampoline);
-                self.ptr.userdata = addr_of_mut!(handler_fn) as *mut c_void;
-                dbg!(self.ptr.userdata);
+        match handler.into() {
+            Some(handler) => {
+                // Stable address
+                let handler = Box::new(handler) as Box<dyn FnMut(AprilResultType, AprilTokens)>;
+                // Thin ptr
+                let handler = Box::new(handler);
+                // Raw ptr
+                let handler = Box::into_raw(handler);
+                self.ptr.handler = Some(trampoline::<F>);
+                self.ptr.userdata = handler as *mut c_void;
             }
             None => {
                 self.ptr.handler = None;
@@ -87,7 +120,7 @@ impl AprilConfig {
     }
 }
 
-impl Default for AprilConfig {
+impl Default for AprilConfig<'_> {
     fn default() -> Self {
         AprilConfig {
             ptr: april_asr_rs_sys::AprilConfig {
@@ -96,6 +129,7 @@ impl Default for AprilConfig {
                 userdata: std::ptr::null_mut(),
                 flags: 0,
             },
+            phantom: PhantomData,
         }
     }
 }

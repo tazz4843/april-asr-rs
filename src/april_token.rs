@@ -23,7 +23,7 @@ pub struct AprilToken<'a> {
 
 impl std::fmt::Display for AprilToken<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} [{}ms]", self.token, self.time_ms)
+        write!(f, "{}", self.token)
     }
 }
 

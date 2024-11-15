@@ -1,19 +1,26 @@
 #![feature(slice_as_chunks)]
 
 use april_asr_rs::*;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, OnceLock};
 
 fn main() {
     let model = AprilModel::new("/home/niko/data/april-asr/models/aprilv0_en-us.april")
         .expect("failed to load model");
+    let model_name = model.get_model_name().expect("failed to get model name");
+    let model_description = model
+        .get_model_description()
+        .expect("failed to get model description");
+    let model_language = model
+        .get_model_language()
+        .expect("failed to get model language");
+    let model_sample_rate = model.get_sample_rate();
+    println!(
+        "Running {} ({}), language {} at an expected sample rate of {}Hz",
+        model_name, model_description, model_language, model_sample_rate
+    );
 
     let mut config = AprilConfig::default();
-    let barrier = Arc::new(Barrier::new(2));
-
-    let barrier2 = Arc::clone(&barrier);
-    config.set_handler_fn(Some(Box::new(move |x, y| {
-        april_callback(x, y, barrier2.clone())
-    })));
+    config.set_handler_fn(april_callback);
     let mut session = model
         .create_session(config)
         .expect("failed to start session");
@@ -25,14 +32,9 @@ fn main() {
     }
     session.feed_pcm16(&mut samples[..]);
     session.flush();
-    barrier.wait();
 }
 
-fn april_callback(result: AprilResultType, tokens: AprilTokens, barrier: Arc<Barrier>) {
+fn april_callback(result: AprilResultType, tokens: AprilTokens) {
     println!("result: {}", result);
     println!("tokens: {}", tokens);
-
-    if result == AprilResultType::RecognitionFinal {
-        barrier.wait();
-    }
 }
