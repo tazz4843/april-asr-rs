@@ -1,20 +1,28 @@
 use crate::april_model::AprilModel;
 use crate::error::{Error, Result};
+use std::ffi::c_void;
 use std::marker::PhantomData;
 
-pub struct AprilSession<'a> {
+pub struct AprilSession<'a, D: Sized + Send + Sync> {
     ptr: april_asr_rs_sys::AprilASRSession,
-    model: PhantomData<&'a AprilModel>,
+    user_data_ptr: *mut c_void,
+    phantom_model: PhantomData<&'a AprilModel>,
+    phantom_type: PhantomData<D>,
 }
 
-impl<'a> AprilSession<'a> {
-    pub(crate) fn new(ptr: april_asr_rs_sys::AprilASRSession) -> Result<AprilSession<'a>> {
+impl<'a, D: Sized + Send + Sync> AprilSession<'a, D> {
+    pub(crate) fn new(
+        ptr: april_asr_rs_sys::AprilASRSession,
+        user_data_ptr: *mut c_void,
+    ) -> Result<AprilSession<'a, D>> {
         if ptr.is_null() {
             Err(Error::NullPtr)
         } else {
             Ok(Self {
                 ptr,
-                model: PhantomData,
+                user_data_ptr,
+                phantom_model: PhantomData,
+                phantom_type: PhantomData,
             })
         }
     }
@@ -38,8 +46,16 @@ impl<'a> AprilSession<'a> {
     }
 }
 
-impl Drop for AprilSession<'_> {
+impl<D: Sized + Send + Sync> Drop for AprilSession<'_, D> {
     fn drop(&mut self) {
+        // Run april cleanup
         unsafe { april_asr_rs_sys::aas_free(self.ptr) }
+
+        // After we've destroyed everything coming from April, we can safely destroy our data now
+        // SAFETY: this ptr was passed in from a Box::<T>::into_raw call, or it was originally a nullptr,
+        // both from AprilConfig, and it remained untouched through the whole life of self.
+        unsafe {
+            crate::april_config::clean_up_user_data::<D>(self.user_data_ptr);
+        }
     }
 }

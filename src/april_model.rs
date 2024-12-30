@@ -54,10 +54,13 @@ impl AprilModel {
         unsafe { april_asr_rs_sys::aam_get_sample_rate(self.ptr) }
     }
 
-    pub fn create_session(&self, config: AprilConfig) -> Result<AprilSession> {
-        let raw_cfg = config.into_raw();
+    pub fn create_session<D: Sized + Send + Sync>(
+        &self,
+        config: AprilConfig<D>,
+    ) -> Result<AprilSession<D>> {
+        let (raw_cfg, user_data_ptr) = config.into_raw();
         let raw_session = unsafe { april_asr_rs_sys::aas_create_session(self.ptr, raw_cfg) };
-        AprilSession::new(raw_session)
+        AprilSession::new(raw_session, user_data_ptr)
     }
 }
 
